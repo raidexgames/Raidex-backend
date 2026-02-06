@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Test Raidex Backend</title>
+</head>
+<body>
+  <h1>Raidex Test</h1>
+
+  <input id="playerName" placeholder="Player Name" />
+  <input id="playerScore" placeholder="Score" type="number" />
+  <button onclick="addPlayer()">Add Player</button>
+
+  <h2>Players List:</h2>
+  <ul id="playersList"></ul>
+
+  <script>
+    const baseUrl = "http://localhost:3000";
+
+    async function addPlayer() {
+      const name = document.getElementById("playerName").value;
+      const score = Number(document.getElementById("playerScore").value);
+
+      const res = await fetch(`${baseUrl}/add-player`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, score })
+      });
+
+      const data = await res.json();
+      alert("Player added with ID: " + data.id);
+      getPlayers(); // حدث قائمة اللاعبين بعد الإضافة
+    }
+
+    async function getPlayers() {
+      const res = await fetch(`${baseUrl}/players`);
+      const players = await res.json();
+
+      const ul = document.getElementById("playersList");
+      ul.innerHTML = "";
+      players.forEach(p => {
+        const li = document.createElement("li");
+        li.textContent = `${p.name} - Score: ${p.score}`;
+        ul.appendChild(li);
+      });
+    }
+
+    // جلب اللاعبين عند فتح الصفحة
+    getPlayers();
+  </script>
+</body>
+</html>
