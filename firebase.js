@@ -3,13 +3,13 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBovGN4oDz8VMyO5N-KzxQlyXwM20xKl5Q",
-  authDomain: "raidexgames-98190.firebaseapp.com",
-  projectId: "raidexgames-98190",
-  storageBucket: "raidexgames-98190.firebasestorage.app",
-  messagingSenderId: "821310885978",
-  appId: "1:821310885978:web:df4fcb53b2b3a18e204863",
-  measurementId: "G-43D486TC3H"
+  apiKey: "AIzaSyBsQ4-f0ucy8qUJv8P6NxAXP8KFtZ9OuFI",
+  authDomain: "raidex.firebaseapp.com",
+  projectId: "raidex",
+  storageBucket: "raidex.firebasestorage.app",
+  messagingSenderId: "171217233796",
+  appId: "1:171217233796:web:8a6c3a9551732f4c991fd1",
+  measurementId: "G-KGFNH740QD"
 };
 
 const app = initializeApp(firebaseConfig);

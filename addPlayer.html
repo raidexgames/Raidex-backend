@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Register Telegram Player</title>
+</head>
+<body>
+  <h2>تسجيل لاعب جديد</h2>
+  <input id="telegramId" placeholder="ادخل Telegram ID" />
+  <input id="telegramName" placeholder="ادخل Telegram Name" />
+  <button onclick="registerPlayer()">سجل اللاعب</button>
+
+  <p id="result"></p>
+
+  <script>
+    async function registerPlayer() {
+      const telegramId = document.getElementById('telegramId').value;
+      const telegramName = document.getElementById('telegramName').value;
+
+      if (!telegramId || !telegramName) {
+        alert("مطلوب إدخال كل البيانات!");
+        return;
+      }
+
+      try {
+        const response = await fetch("http://localhost:3000/register-telegram-player", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ telegramId, telegramName })
+        });
+
+        const data = await response.json();
+        document.getElementById("result").innerText = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById("result").innerText = "Error: " + err.message;
+      }
+    }
+  </script>
+</body>
+</html>
