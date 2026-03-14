@@ -124,14 +124,19 @@ app.patch("/players/:id", async (req, res) => {
 });
 // Route لبعت رسالة في الشات
 app.post("/chat/send", async (req, res) => {
-  const { senderName, message, chatType } = req.body;
-  if (!senderName || !message) {
+  const { senderName, message, name, text, chatType } = req.body;
+  
+  // نقبل senderName أو name، وكمان message أو text
+  const finalName = senderName || name;
+  const finalMessage = message || text;
+
+  if (!finalName || !finalMessage) {
     return res.status(400).json({ error: "senderName and message are required" });
   }
   try {
     await addDoc(collection(db, "messages"), {
-      senderName,
-      message,
+      senderName: finalName,
+      message: finalMessage,
       chatType: chatType || "global",
       timestamp: Date.now()
     });
@@ -141,6 +146,7 @@ app.post("/chat/send", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // Route لجيب آخر الرسائل
 app.get("/chat/latest", async (req, res) => {
