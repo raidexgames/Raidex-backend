@@ -204,6 +204,105 @@ app.get("/load-game-state/:telegramId", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// إنشاء كلان جديد
+app.post("/clan/create", async (req, res) => {
+  const { clanName, leaderTelegramId, leaderName } = req.body;
+  if (!clanName || !leaderTelegramId) {
+    return res.status(400).json({ error: "clanName and leaderTelegramId required" });
+  }
+  try {
+    // نتأكد إن مفيش كلان بنفس الاسم
+    const clansRef = collection(db, "clans");
+    const q = query(clansRef, where("name", "==", clanName));
+    const existing = await getDocs(q);
+    if (!existing.empty) {
+      return res.status(400).json({ error: "Clan name already exists" });
+    }
+
+    const clanRef = await addDoc(clansRef, {
+      name: clanName,
+      leaderTelegramId: String(leaderTelegramId),
+      members: [{ telegramId: String(leaderTelegramId), name: leaderName, role: "leader" }],
+      createdAt: Date.now()
+    });
+
+    // نحدّث بيانات اللاعب إنه انضم لكلان
+    const playerDocRef = doc(collection(db, "players"), String(leaderTelegramId));
+    await setDoc(playerDocRef, { clanId: clanRef.id, clanName }, { merge: true });
+
+    res.status(200).json({ message: "Clan created", clanId: clanRef.id });
+  } catch (err) {
+    console.error("Error creating clan:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// الانضمام لكلان
+app.post("/clan/join", async (req, res) => {
+  const { clanName, telegramId, playerName } = req.body;
+  if (!clanName || !telegramId) {
+    return res.status(400).json({ error: "clanName and telegramId required" });
+  }
+  try {
+    const clansRef = collection(db, "clans");
+    const q = query(clansRef, where("name", "==", clanName));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) {
+      return res.status(404).json({ error: "Clan not found" });
+    }
+
+    const clanDoc = snapshot.docs[0];
+    const clanData = clanDoc.data();
+    const members = clanData.members || [];
+
+    // نتأكد إن اللاعب مش موجود بالفعل
+    const alreadyMember = members.find(m => m.telegramId === String(telegramId));
+    if (alreadyMember) {
+      return res.status(400).json({ error: "Already a member" });
+    }
+
+    members.push({ telegramId: String(telegramId), name: playerName, role: "member" });
+    await setDoc(doc(db, "clans", clanDoc.id), { members }, { merge: true });
+
+    // نحدّث بيانات اللاعب
+    const playerDocRef = doc(collection(db, "players"), String(telegramId));
+    await setDoc(playerDocRef, { clanId: clanDoc.id, clanName }, { merge: true });
+
+    res.status(200).json({ message: "Joined clan", clanId: clanDoc.id, members });
+  } catch (err) {
+    console.error("Error joining clan:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// جيب بيانات كلان
+app.get("/clan/:clanId", async (req, res) => {
+  const { clanId } = req.params;
+  try {
+    const clanDocRef = doc(db, "clans", clanId);
+    const clanSnap = await getDoc(clanDocRef);
+    if (!clanSnap.exists()) {
+      return res.status(404).json({ error: "Clan not found" });
+    }
+    res.status(200).json({ id: clanSnap.id, ...clanSnap.data() });
+  } catch (err) {
+    console.error("Error getting clan:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// جيب كل الكلانات
+app.get("/clans", async (req, res) => {
+  try {
+    const snapshot = await getDocs(collection(db, "clans"));
+    const clans = [];
+    snapshot.forEach(d => clans.push({ id: d.id, ...d.data() }));
+    res.status(200).json(clans);
+  } catch (err) {
+    console.error("Error getting clans:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`✅ Server is running at http://localhost:${PORT}`);
