@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { db } from "./firebase.js";
-import { collection, addDoc, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, getDoc } from "firebase/firestore";
 
 
 const app = express();
@@ -169,6 +169,38 @@ app.get("/chat/latest", async (req, res) => {
     res.status(200).json(messages);
   } catch (err) {
     console.error("Error getting messages:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+// Route لحفظ حالة اللعبة
+app.post("/save-game-state", async (req, res) => {
+  const { telegramId, gameState } = req.body;
+  if (!telegramId || !gameState) {
+    return res.status(400).json({ error: "telegramId and gameState are required" });
+  }
+  try {
+    const playerDocRef = doc(collection(db, "players"), String(telegramId));
+    await setDoc(playerDocRef, { gameState }, { merge: true });
+    res.status(200).json({ message: "Game state saved" });
+  } catch (err) {
+    console.error("Error saving game state:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Route لجلب حالة اللعبة
+app.get("/load-game-state/:telegramId", async (req, res) => {
+  const { telegramId } = req.params;
+  try {
+    const playerDocRef = doc(collection(db, "players"), String(telegramId));
+    const docSnap = await getDoc(playerDocRef);
+    if (!docSnap.exists()) {
+      return res.status(404).json({ error: "Player not found" });
+    }
+    const data = docSnap.data();
+    res.status(200).json({ gameState: data.gameState || null });
+  } catch (err) {
+    console.error("Error loading game state:", err);
     res.status(500).json({ error: err.message });
   }
 });
