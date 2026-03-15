@@ -303,6 +303,44 @@ app.get("/clans", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// مغادرة كلان
+app.post("/clan/leave", async (req, res) => {
+  const { telegramId } = req.body;
+  if (!telegramId) {
+    return res.status(400).json({ error: "telegramId required" });
+  }
+  try {
+    // نجيب بيانات اللاعب عشان نعرف الـ clanId
+    const playerDocRef = doc(collection(db, "players"), String(telegramId));
+    const playerSnap = await getDoc(playerDocRef);
+    if (!playerSnap.exists()) {
+      return res.status(404).json({ error: "Player not found" });
+    }
+
+    const playerData = playerSnap.data();
+    const clanId = playerData.clanId;
+    if (!clanId) {
+      return res.status(400).json({ error: "Player is not in a clan" });
+    }
+
+    // نشيل اللاعب من الكلان
+    const clanDocRef = doc(db, "clans", clanId);
+    const clanSnap = await getDoc(clanDocRef);
+    if (clanSnap.exists()) {
+      const members = clanSnap.data().members || [];
+      const newMembers = members.filter(m => m.telegramId !== String(telegramId));
+      await setDoc(clanDocRef, { members: newMembers }, { merge: true });
+    }
+
+    // نشيل الكلان من بيانات اللاعب
+    await setDoc(playerDocRef, { clanId: null, clanName: null }, { merge: true });
+
+    res.status(200).json({ message: "Left clan successfully" });
+  } catch (err) {
+    console.error("Error leaving clan:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`✅ Server is running at http://localhost:${PORT}`);
