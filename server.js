@@ -139,19 +139,23 @@ app.get("/chat/latest", async (req, res) => {
 
 // Route لحفظ حالة اللعبة
 app.post("/save-game-state", async (req, res) => {
-  const { telegramId, gameState } = req.body;
+  const { telegramId, gameState, power } = req.body;
   if (!telegramId || !gameState) {
     return res.status(400).json({ error: "telegramId and gameState are required" });
   }
   try {
     const playerDocRef = doc(collection(db, "players"), String(telegramId));
-    await setDoc(playerDocRef, { gameState }, { merge: true });
+    await setDoc(playerDocRef, { 
+      gameState,
+      power: power || 0  // نحفظ قوة اللاعب
+    }, { merge: true });
     res.status(200).json({ message: "Game state saved" });
   } catch (err) {
     console.error("Error saving game state:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // Route لجلب حالة اللعبة
 app.get("/load-game-state/:telegramId", async (req, res) => {
@@ -423,6 +427,41 @@ app.post("/clan/levelup", async (req, res) => {
     });
   } catch (err) {
     console.error("Error leveling up clan:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+// تحديث قوة الكلان بناءً على قوة الأعضاء
+app.post("/clan/update-power", async (req, res) => {
+  const { clanId } = req.body;
+  if (!clanId) {
+    return res.status(400).json({ error: "clanId required" });
+  }
+  try {
+    // نجيب بيانات الكلان
+    const clanDocRef = doc(db, "clans", clanId);
+    const clanSnap = await getDoc(clanDocRef);
+    if (!clanSnap.exists()) {
+      return res.status(404).json({ error: "Clan not found" });
+    }
+
+    const members = clanSnap.data().members || [];
+    let totalPower = 0;
+
+    // نجيب قوة كل عضو من Firestore
+    for (const member of members) {
+      const playerDocRef = doc(collection(db, "players"), String(member.telegramId));
+      const playerSnap = await getDoc(playerDocRef);
+      if (playerSnap.exists()) {
+        totalPower += playerSnap.data().power || 0;
+      }
+    }
+
+    // نحدّث قوة الكلان
+    await setDoc(clanDocRef, { totalPower }, { merge: true });
+
+    res.status(200).json({ message: "Clan power updated", totalPower });
+  } catch (err) {
+    console.error("Error updating clan power:", err);
     res.status(500).json({ error: err.message });
   }
 });
