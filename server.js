@@ -532,7 +532,7 @@ app.get("/leaderboard/players", async (req, res) => {
       }
     });
     players.sort((a, b) => b.power - a.power);
-    players = players.slice(0, 50);
+ players = players.slice(0, 100);
     res.status(200).json(players);
   } catch (err) {
     console.error("Error getting leaderboard:", err);
@@ -559,6 +559,128 @@ app.get("/leaderboard/clans", async (req, res) => {
     res.status(200).json(clans);
   } catch (err) {
     console.error("Error getting clans leaderboard:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+// بعت طلب صداقة
+app.post("/friends/request", async (req, res) => {
+  const { fromId, toId } = req.body;
+  if (!fromId || !toId) return res.status(400).json({ error: "fromId and toId required" });
+  try {
+    const requestRef = doc(db, "friendRequests", `${fromId}_${toId}`);
+    await setDoc(requestRef, {
+      fromId: String(fromId),
+      toId: String(toId),
+      status: "pending",
+      createdAt: Date.now()
+    });
+    res.status(200).json({ message: "Friend request sent" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// جيب طلبات الصداقة الواردة
+app.get("/friends/requests/:telegramId", async (req, res) => {
+  const { telegramId } = req.params;
+  try {
+    const q = query(collection(db, "friendRequests"), where("toId", "==", String(telegramId)), where("status", "==", "pending"));
+    const snapshot = await getDocs(q);
+    const requests = [];
+    for (const d of snapshot.docs) {
+      const data = d.data();
+      const playerSnap = await getDoc(doc(db, "players", data.fromId));
+      const playerName = playerSnap.exists() ? playerSnap.data().telegramName : "Unknown";
+      requests.push({ id: d.id, ...data, fromName: playerName });
+    }
+    res.status(200).json(requests);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// قبول طلب صداقة
+app.post("/friends/accept", async (req, res) => {
+  const { fromId, toId } = req.body;
+  if (!fromId || !toId) return res.status(400).json({ error: "fromId and toId required" });
+  try {
+    // حدّث الطلب
+    const requestRef = doc(db, "friendRequests", `${fromId}_${toId}`);
+    await setDoc(requestRef, { status: "accepted" }, { merge: true });
+
+    // أضف كل واحد في قائمة أصدقاء التاني
+    const fromRef = doc(db, "players", String(fromId));
+    const toRef = doc(db, "players", String(toId));
+    const fromSnap = await getDoc(fromRef);
+    const toSnap = await getDoc(toRef);
+
+    const fromFriends = fromSnap.data().friends || [];
+    const toFriends = toSnap.data().friends || [];
+
+    if (!fromFriends.includes(String(toId))) fromFriends.push(String(toId));
+    if (!toFriends.includes(String(fromId))) toFriends.push(String(fromId));
+
+    await setDoc(fromRef, { friends: fromFriends }, { merge: true });
+    await setDoc(toRef, { friends: toFriends }, { merge: true });
+
+    res.status(200).json({ message: "Friend request accepted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// جيب قائمة الأصدقاء
+app.get("/friends/:telegramId", async (req, res) => {
+  const { telegramId } = req.params;
+  try {
+    const playerSnap = await getDoc(doc(db, "players", String(telegramId)));
+    if (!playerSnap.exists()) return res.status(404).json({ error: "Player not found" });
+    const friends = playerSnap.data().friends || [];
+    const friendsList = [];
+    for (const fId of friends) {
+      const fSnap = await getDoc(doc(db, "players", fId));
+      if (fSnap.exists()) {
+        friendsList.push({ id: fId, name: fSnap.data().telegramName });
+      }
+    }
+    res.status(200).json(friendsList);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// بعت رسالة لصديق
+app.post("/friends/message", async (req, res) => {
+  const { fromId, toId, message } = req.body;
+  if (!fromId || !toId || !message) return res.status(400).json({ error: "fromId, toId and message required" });
+  try {
+    const chatId = [String(fromId), String(toId)].sort().join("_");
+    await addDoc(collection(db, "friendMessages"), {
+      chatId,
+      fromId: String(fromId),
+      toId: String(toId),
+      message,
+      timestamp: Date.now()
+    });
+    res.status(200).json({ message: "Message sent" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// جيب رسائل بين صديقين
+app.get("/friends/messages/:id1/:id2", async (req, res) => {
+  const { id1, id2 } = req.params;
+  try {
+    const chatId = [String(id1), String(id2)].sort().join("_");
+    const q = query(collection(db, "friendMessages"), where("chatId", "==", chatId));
+    const snapshot = await getDocs(q);
+    let messages = [];
+    snapshot.forEach(d => messages.push({ id: d.id, ...d.data() }));
+    messages.sort((a, b) => a.timestamp - b.timestamp);
+    messages = messages.slice(-50);
+    res.status(200).json(messages);
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
