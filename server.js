@@ -447,14 +447,41 @@ app.post("/clan/update-power", async (req, res) => {
     const members = clanSnap.data().members || [];
     let totalPower = 0;
 
-    // نجيب قوة كل عضو من Firestore
-    for (const member of members) {
-      const playerDocRef = doc(collection(db, "players"), String(member.telegramId));
-      const playerSnap = await getDoc(playerDocRef);
-      if (playerSnap.exists()) {
-        totalPower += playerSnap.data().power || 0;
-      }
+  // نجيب قوة كل عضو من Firestore
+for (const member of members) {
+  const playerDocRef = doc(collection(db, "players"), String(member.telegramId));
+  const playerSnap = await getDoc(playerDocRef);
+  if (playerSnap.exists()) {
+    const playerData = playerSnap.data();
+
+    if (playerData.power) {
+      totalPower += playerData.power;
+    } else if (playerData.gameState) {
+      const gs = playerData.gameState;
+      const cl = gs.castleLevel || 1;
+      const bl = gs.buildingLevels || {};
+      const base = 100;
+      const growth = 1.15;
+      let cp = Math.floor(base * Math.pow(growth, cl - 1));
+      let bonus = 0;
+      if (cl >= 5) bonus += Math.floor(Math.min(cl, 25) / 5) * 10000;
+      if (cl >= 30) bonus += 20000;
+      if (cl >= 35) bonus += 25000;
+      if (cl >= 40) bonus += 30000;
+      if (cl >= 45) bonus += 35000;
+      if (cl >= 50) bonus += 50000;
+      cp += bonus;
+      const bp =
+        (bl.goldMine || 1) * 20 +
+        (bl.woodMine || 1) * 15 +
+        (bl.meatFarm || 1) * 10 +
+        (bl.school || 1) * 25 +
+        (bl.hospital || 1) * 30;
+      totalPower += cp + bp;
     }
+  }
+}
+
 
     // نحدّث قوة الكلان
     await setDoc(clanDocRef, { totalPower }, { merge: true });
