@@ -507,6 +507,61 @@ app.get("/players/:id", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// أقوى اللاعبين
+app.get("/leaderboard/players", async (req, res) => {
+  try {
+    const snapshot = await getDocs(collection(db, "players"));
+    let players = [];
+    snapshot.forEach(d => {
+      const data = d.data();
+      if (data.telegramName) {
+        const gs = data.gameState || {};
+        const bl = gs.buildingLevels || {};
+        const armyPower =
+          (bl.attackTower || 1) * 50 +
+          (bl.defenseTower || 1) * 40 +
+          (bl.school || 1) * 30;
+        players.push({
+          id: d.id,
+          name: data.telegramName,
+          power: data.power || 0,
+          level: gs.castleLevel || 1,
+          armyPower: armyPower,
+          clanName: data.clanName || null
+        });
+      }
+    });
+    players.sort((a, b) => b.power - a.power);
+    players = players.slice(0, 50);
+    res.status(200).json(players);
+  } catch (err) {
+    console.error("Error getting leaderboard:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// أقوى الكلانات
+app.get("/leaderboard/clans", async (req, res) => {
+  try {
+    const snapshot = await getDocs(collection(db, "clans"));
+    let clans = [];
+    snapshot.forEach(d => {
+      const data = d.data();
+      clans.push({
+        id: d.id,
+        name: data.name,
+        totalPower: data.totalPower || 0,
+        level: data.level || 1,
+        membersCount: data.members?.length || 0
+      });
+    });
+    clans.sort((a, b) => b.totalPower - a.totalPower);
+    res.status(200).json(clans);
+  } catch (err) {
+    console.error("Error getting clans leaderboard:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`✅ Server is running at http://localhost:${PORT}`);
