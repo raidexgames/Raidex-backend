@@ -290,6 +290,142 @@ app.post("/clan/leave", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// متطلبات مستويات الكلان
+const CLAN_LEVEL_REQUIREMENTS = {
+  1: { gems: 5000, gold: 100000, maxMembers: 15 },
+  2: { gems: 10000, gold: 250000, maxMembers: 20 },
+  3: { gems: 25000, gold: 1000000, maxMembers: 25 },
+  4: { gems: 50000, gold: 5000000, maxMembers: 30 },
+  5: { gems: 100000, gold: 10000000, maxMembers: 35 },
+  6: { gems: 125000, gold: 20000000, maxMembers: 40 },
+  7: { gems: 150000, gold: 50000000, maxMembers: 45 },
+  8: { gems: 175000, gold: 100000000, maxMembers: 50 },
+  9: { gems: 200000, gold: 200000000, maxMembers: 55 },
+  10: { gems: 250000, gold: 500000000, maxMembers: 60 }
+};
+
+// Route للتبرع للكلان
+app.post("/clan/donate", async (req, res) => {
+  const { telegramId, gold, gems } = req.body;
+  if (!telegramId) {
+    return res.status(400).json({ error: "telegramId required" });
+  }
+  try {
+    const telegramIdStr = String(telegramId);
+
+    // نجيب بيانات اللاعب
+    const playerDocRef = doc(collection(db, "players"), telegramIdStr);
+    const playerSnap = await getDoc(playerDocRef);
+    if (!playerSnap.exists()) {
+      return res.status(404).json({ error: "Player not found" });
+    }
+
+    const playerData = playerSnap.data();
+    if (!playerData.clanId) {
+      return res.status(400).json({ error: "Player is not in a clan" });
+    }
+
+    // نجيب بيانات الكلان
+    const clanDocRef = doc(db, "clans", playerData.clanId);
+    const clanSnap = await getDoc(clanDocRef);
+    if (!clanSnap.exists()) {
+      return res.status(404).json({ error: "Clan not found" });
+    }
+
+    const clanData = clanSnap.data();
+    const treasury = clanData.treasury || { gold: 0, gems: 0 };
+
+    // نضيف التبرع للخزينة
+    const donateGold = parseInt(gold) || 0;
+    const donateGems = parseInt(gems) || 0;
+
+    treasury.gold += donateGold;
+    treasury.gems += donateGems;
+
+    await setDoc(clanDocRef, { treasury }, { merge: true });
+
+    res.status(200).json({
+      message: "Donation successful",
+      treasury
+    });
+  } catch (err) {
+    console.error("Error donating:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Route لرفع مستوى الكلان (القائد بس)
+app.post("/clan/levelup", async (req, res) => {
+  const { telegramId } = req.body;
+  if (!telegramId) {
+    return res.status(400).json({ error: "telegramId required" });
+  }
+  try {
+    const telegramIdStr = String(telegramId);
+
+    // نتأكد إن اللاعب قائد
+    const playerDocRef = doc(collection(db, "players"), telegramIdStr);
+    const playerSnap = await getDoc(playerDocRef);
+    if (!playerSnap.exists()) {
+      return res.status(404).json({ error: "Player not found" });
+    }
+
+    const playerData = playerSnap.data();
+    if (!playerData.clanId) {
+      return res.status(400).json({ error: "Player is not in a clan" });
+    }
+
+    const clanDocRef = doc(db, "clans", playerData.clanId);
+    const clanSnap = await getDoc(clanDocRef);
+    if (!clanSnap.exists()) {
+      return res.status(404).json({ error: "Clan not found" });
+    }
+
+    const clanData = clanSnap.data();
+
+    // نتأكد إن اللاعب قائد
+    if (String(clanData.leaderTelegramId) !== telegramIdStr) {
+      return res.status(403).json({ error: "Only the leader can level up the clan" });
+    }
+
+    const currentLevel = clanData.level || 1;
+    if (currentLevel >= 10) {
+      return res.status(400).json({ error: "Clan is already at max level" });
+    }
+
+    const requirements = CLAN_LEVEL_REQUIREMENTS[currentLevel];
+    const treasury = clanData.treasury || { gold: 0, gems: 0 };
+
+    // نتأكد إن الخزينة فيها الكافي
+    if (treasury.gold < requirements.gold || treasury.gems < requirements.gems) {
+      return res.status(400).json({
+        error: "Not enough resources in treasury",
+        required: requirements,
+        current: treasury
+      });
+    }
+
+    // نخصم من الخزينة ونرفع المستوى
+    treasury.gold -= requirements.gold;
+    treasury.gems -= requirements.gems;
+    const newLevel = currentLevel + 1;
+
+    await setDoc(clanDocRef, {
+      level: newLevel,
+      treasury,
+      maxMembers: CLAN_LEVEL_REQUIREMENTS[currentLevel].maxMembers
+    }, { merge: true });
+
+    res.status(200).json({
+      message: "Clan leveled up!",
+      newLevel,
+      treasury
+    });
+  } catch (err) {
+    console.error("Error leveling up clan:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.listen(PORT, () => {
   console.log(`✅ Server is running at http://localhost:${PORT}`);
